@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPL Scout — Gameweek Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --pitch: #1a472a;
+    --pitch-light: #1f5c35;
+    --accent: #00ff87;
+    --accent2: #f72585;
+    --accent3: #ffd60a;
+    --dark: #050a0e;
+    --surface: #0d1b2a;
+    --surface2: #112233;
+    --muted: #4a6a8a;
+    --text: #e8f4f8;
+    --text2: #8ab4cc;
+  }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,255,135,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,135,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid rgba(0,255,135,0.15);
+    padding: 20px 0;
+    background: rgba(5,10,14,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .logo-main {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(0,255,135,0.5);
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .gw-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+  }
+
+  .fetch-btn {
+    background: var(--accent);
+    color: var(--dark);
+    border: none;
+    padding: 10px 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .fetch-btn:hover { background: #00e077; box-shadow: 0 0 20px rgba(0,255,135,0.4); }
+  .fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* STATUS BAR */
+  .status-bar {
+    background: var(--surface);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding: 10px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    overflow: hidden;
+  }
+
+  .status-inner { display: flex; gap: 40px; align-items: center; }
+  .status-item { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* MAIN LAYOUT */
+  .main { padding: 32px 0; }
+
+  /* ALGORITHM PANEL */
+  .algo-panel {
+    background: var(--surface);
+    border: 1px solid rgba(0,255,135,0.1);
+    border-radius: 4px;
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+
+  .panel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(0,255,135,0.15);
+  }
+
+  .weights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .weight-item label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text2);
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .weight-row { display: flex; align-items: center; gap: 12px; }
+
+  .weight-item input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .weight-item input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,255,135,0.5);
+  }
+
+  .weight-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    width: 32px;
+    text-align: right;
+  }
+
+  /* FILTERS */
+  .filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    align-items: center;
+  }
+
+  .filter-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    padding: 7px 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,255,135,0.05);
+  }
+
+  .filter-btn.pos-GK.active { border-color: #ffd60a; color: #ffd60a; background: rgba(255,214,10,0.05); }
+  .filter-btn.pos-DEF.active { border-color: #4cc9f0; color: #4cc9f0; background: rgba(76,201,240,0.05); }
+  .filter-btn.pos-MID.active { border-color: #f72585; color: #f72585; background: rgba(247,37,133,0.05); }
+  .filter-btn.pos-FWD.active { border-color: #ff6b35; color: #ff6b35; background: rgba(255,107,53,0.05); }
+
+  .sort-select {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    padding: 7px 12px;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text2);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* RESULTS GRID */
+  .results-header {
+    display: grid;
+    grid-template-columns: 40px 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 10px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .player-rows { display: flex; flex-direction: column; gap: 2px; }
+
+  .player-row {
+    display: grid;
+    grid-template-columns: 40px 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    align-items: center;
+    transition: all 0.15s;
+    cursor: pointer;
+    animation: rowIn 0.3s ease both;
+  }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .player-row:hover {
+    border-color: rgba(0,255,135,0.2);
+    background: var(--surface2);
+    transform: translateX(4px);
+  }
+
+  .rank-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .rank-num.top3 { color: var(--accent); font-size: 1rem; }
+
+  .player-info { display: flex; flex-direction: column; gap: 2px; }
+  .player-name { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+  .player-meta { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); }
+
+  .pos-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+
+  .pos-GK { background: rgba(255,214,10,0.15); color: #ffd60a; }
+  .pos-DEF { background: rgba(76,201,240,0.15); color: #4cc9f0; }
+  .pos-MID { background: rgba(247,37,133,0.15); color: #f72585; }
+  .pos-FWD { background: rgba(255,107,53,0.15); color: #ff6b35; }
+
+  .stat-cell {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text2);
+    text-align: center;
+  }
+
+  .score-cell {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    color: var(--accent);
+    text-align: center;
+    text-shadow: 0 0 15px rgba(0,255,135,0.4);
+  }
+
+  .form-bar {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+  }
+
+  .form-pip {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+  }
+
+  .diff-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .ownership-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text2);
+  }
+
+  .own-track {
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .own-fill { height: 100%; border-radius: 2px; background: var(--accent2); }
+
+  /* LOADING */
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: 20px;
+  }
+
+  .loader-ring {
+    width: 60px;
+    height: 60px;
+    border: 2px solid rgba(0,255,135,0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .loading-steps { display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
+  .loading-step {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: color 0.3s;
+  }
+  .loading-step.done { color: var(--accent); }
+  .loading-step.active { color: var(--text); }
+  .step-icon { width: 16px; }
+
+  /* DETAIL MODAL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,10,14,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid rgba(0,255,135,0.2);
+    border-radius: 6px;
+    padding: 32px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.2s;
+  }
+
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text2);
+    width: 32px;
+    height: 32px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-player-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .modal-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4rem;
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(0,255,135,0.4);
+    line-height: 1;
+  }
+
+  .feature-breakdown {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .feature-row { display: flex; flex-direction: column; gap: 6px; }
+
+  .feature-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text2);
+  }
+
+  .feature-track {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .feature-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  /* STATS SUMMARY */
+  .stats-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 4px;
+    padding: 20px;
+  }
+
+  .stat-card-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat-card-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .error-msg {
+    background: rgba(247,37,133,0.1);
+    border: 1px solid rgba(247,37,133,0.3);
+    border-radius: 4px;
+    padding: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent2);
+    margin: 20px 0;
+  }
+
+  .cors-note {
+    background: rgba(255,214,10,0.08);
+    border: 1px solid rgba(255,214,10,0.2);
+    border-radius: 4px;
+    padding: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: #ffd60a;
+    line-height: 1.7;
+    margin: 20px 0;
+  }
+
+  .cors-note strong { display: block; margin-bottom: 8px; font-size: 0.85rem; }
+
+  .demo-btn {
+    background: transparent;
+    border: 1px solid var(--accent3);
+    color: var(--accent3);
+    padding: 10px 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    transition: all 0.2s;
+    margin-top: 12px;
+  }
+  .demo-btn:hover { background: rgba(255,214,10,0.1); }
+
+  .csv-btn {
+    background: transparent;
+    border: 1px solid rgba(76,201,240,0.5);
+    color: #4cc9f0;
+    padding: 10px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .csv-btn:hover { background: rgba(76,201,240,0.08); border-color: #4cc9f0; box-shadow: 0 0 16px rgba(76,201,240,0.2); }
+
+  /* CSV drop zone */
+  .csv-drop-zone {
+    border: 2px dashed rgba(76,201,240,0.3);
+    border-radius: 6px;
+    padding: 48px 32px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: rgba(76,201,240,0.03);
+    margin: 20px 0;
+  }
+  .csv-drop-zone:hover, .csv-drop-zone.drag-over {
+    border-color: #4cc9f0;
+    background: rgba(76,201,240,0.07);
+    box-shadow: 0 0 30px rgba(76,201,240,0.1);
+  }
+  .csv-drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .csv-drop-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+    color: #4cc9f0;
+    margin-bottom: 8px;
+  }
+  .csv-drop-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 16px;
+  }
+  .csv-drop-or {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin: 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .csv-drop-or::before, .csv-drop-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+  }
+  .csv-browse-btn {
+    background: rgba(76,201,240,0.1);
+    border: 1px solid rgba(76,201,240,0.4);
+    color: #4cc9f0;
+    padding: 9px 22px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+    transition: all 0.2s;
+  }
+  .csv-browse-btn:hover { background: rgba(76,201,240,0.18); }
+
+  .csv-columns-note {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(76,201,240,0.1);
+    border-radius: 4px;
+    padding: 16px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.8;
+    text-align: left;
+    margin-top: 16px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .csv-columns-note strong { color: #4cc9f0; display: block; margin-bottom: 6px; font-size: 0.72rem; }
+
+  .csv-error {
+    background: rgba(247,37,133,0.1);
+    border: 1px solid rgba(247,37,133,0.3);
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent2);
+    margin-top: 16px;
+    display: none;
+  }
+
+  .source-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+  .source-live { background: rgba(0,255,135,0.12); color: var(--accent); border: 1px solid rgba(0,255,135,0.3); }
+  .source-csv  { background: rgba(76,201,240,0.12); color: #4cc9f0;    border: 1px solid rgba(76,201,240,0.3); }
+  .source-demo { background: rgba(255,214,10,0.12); color: #ffd60a;    border: 1px solid rgba(255,214,10,0.3); }
+
+  .tab-row { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .code-block {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(0,255,135,0.1);
+    border-radius: 4px;
+    padding: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: #a8d8a8;
+    overflow-x: auto;
+    line-height: 1.8;
+    white-space: pre;
+  }
+
+  .code-block .comment { color: var(--muted); }
+  .code-block .keyword { color: #f72585; }
+  .code-block .string { color: #ffd60a; }
+  .code-block .number { color: #4cc9f0; }
+  .code-block .fn { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-main">FPL Scout</span>
+        <span class="logo-sub">Gameweek Intelligence</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <span class="gw-badge" id="gwBadge">GW — Loading</span>
+        <button class="csv-btn" onclick="document.getElementById('csvFileInput').click()" title="Load CSV from fpl_scout.py">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Load CSV
+        </button>
+        <button class="fetch-btn" id="fetchBtn" onclick="fetchData()">↻ Fetch Live Data</button>
+        <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="status-bar">
+  <div class="container">
+    <div class="status-inner">
+      <div class="status-item"><span class="status-dot"></span><span id="statusText">Ready — Load a CSV, fetch live data, or try demo mode</span></div>
+      <div class="status-item">API: fantasy.premierleague.com/api/</div>
+      <div class="status-item">Algorithm: Weighted Multi-Feature Scoring</div>
+      <div class="status-item" id="playerCount">Players: —</div>
+      <div class="status-item" id="dataSourceBadge"></div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="main">
+
+    <!-- TABS -->
+    <div class="tab-row">
+      <div class="tab active" onclick="switchTab('recommendations')">Recommendations</div>
+      <div class="tab" onclick="switchTab('algorithm')">Algorithm</div>
+      <div class="tab" onclick="switchTab('code')">Python Code</div>
+    </div>
+
+    <!-- RECOMMENDATIONS TAB -->
+    <div class="tab-panel active" id="tab-recommendations">
+
+      <!-- ALGORITHM WEIGHTS -->
+      <div class="algo-panel">
+        <div class="panel-title">Algorithm Weights</div>
+        <div class="weights-grid" id="weightsGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- STATS SUMMARY -->
+      <div class="stats-summary" id="statsSummary" style="display:none">
+        <div class="stat-card">
+          <div class="stat-card-label">Total Players</div>
+          <div class="stat-card-value" id="sumTotal" style="color:var(--accent)">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Avg Points/GW</div>
+          <div class="stat-card-value" id="sumAvgPts" style="color:#4cc9f0">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Top Scout Score</div>
+          <div class="stat-card-value" id="sumTopScore" style="color:var(--accent)">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Next GW</div>
+          <div class="stat-card-value" id="sumNextGW" style="color:#ffd60a">—</div>
+        </div>
+      </div>
+
+      <!-- FILTERS -->
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterPos('ALL', this)">All</button>
+        <button class="filter-btn pos-GK" onclick="filterPos('GK', this)">GK</button>
+        <button class="filter-btn pos-DEF" onclick="filterPos('DEF', this)">DEF</button>
+        <button class="filter-btn pos-MID" onclick="filterPos('MID', this)">MID</button>
+        <button class="filter-btn pos-FWD" onclick="filterPos('FWD', this)">FWD</button>
+        <select class="sort-select" onchange="sortPlayers(this.value)">
+          <option value="score">Sort: Scout Score</option>
+          <option value="form">Sort: Form</option>
+          <option value="ppg">Sort: Points/Game</option>
+          <option value="price">Sort: Price</option>
+          <option value="ownership">Sort: Ownership</option>
+          <option value="difficulty">Sort: Fixture Difficulty</option>
+        </select>
+      </div>
+
+      <!-- RESULTS -->
+      <div id="resultsArea">
+        <div class="loading-screen" id="initialState">
+          <div style="text-align:center;max-width:560px;width:100%">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:2.6rem;color:var(--accent);margin-bottom:8px">LOAD YOUR DATA</div>
+            <div style="color:var(--text2);font-size:0.85rem;line-height:1.7;margin-bottom:24px">
+              Three ways to get started — pick the one that suits you.
+            </div>
+
+            <!-- CSV DROP ZONE -->
+            <div class="csv-drop-zone" id="csvDropZone"
+              ondragover="handleDragOver(event)"
+              ondragleave="handleDragLeave(event)"
+              ondrop="handleDrop(event)"
+              onclick="document.getElementById('csvFileInput2').click()">
+              <div class="csv-drop-icon">📂</div>
+              <div class="csv-drop-title">Load fpl_scout.py CSV</div>
+              <div class="csv-drop-sub">
+                Drop your <code style="color:#4cc9f0;background:rgba(76,201,240,0.1);padding:2px 6px;border-radius:2px">fpl_scout_gw*.csv</code> file here<br>
+                or click to browse — re-scored in real-time with your weight settings
+              </div>
+              <button class="csv-browse-btn" onclick="event.stopPropagation();document.getElementById('csvFileInput2').click()">Browse for CSV file</button>
+              <input type="file" id="csvFileInput2" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
+              <div class="csv-columns-note">
+                <strong>Expected columns (from fpl_scout.py output):</strong>
+                name · team · position · price · score · ppg · form · fdr · ownership · xgi_per90<br>
+                <span style="color:rgba(255,255,255,0.3)">Optional: ict_index · bonus · minutes_pct · status</span>
+              </div>
+              <div class="csv-error" id="csvError"></div>
+            </div>
+
+            <div class="csv-drop-or">OR</div>
+
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+              <button class="fetch-btn" onclick="fetchData()" style="font-size:0.78rem">↻ Fetch Live API Data</button>
+              <button class="demo-btn" onclick="loadDemoData()" style="margin-top:0">▶ Load Demo Data</button>
+            </div>
+
+            <div class="cors-note" style="margin-top:20px;text-align:left">
+              <strong>⚠ Tip: CORS blocks direct browser API access</strong>
+              Run <code style="color:#ffd60a">python fpl_scout.py</code> locally to generate the CSV, then drag it in above.<br>
+              Or use "Fetch Live Data" — it tries multiple CORS proxies automatically.
+            </div>
+          </div>
+        </div>
+        <div style="display:none" id="loadingState">
+          <div class="loading-screen">
+            <div class="loader-ring"></div>
+            <div class="loading-steps" id="loadingSteps">
+              <div class="loading-step" id="step1"><span class="step-icon">○</span>Connecting to FPL API</div>
+              <div class="loading-step" id="step2"><span class="step-icon">○</span>Fetching player data (bootstrap-static)</div>
+              <div class="loading-step" id="step3"><span class="step-icon">○</span>Fetching fixture data</div>
+              <div class="loading-step" id="step4"><span class="step-icon">○</span>Running algorithm</div>
+              <div class="loading-step" id="step5"><span class="step-icon">○</span>Ranking players</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:none" id="resultsState">
+          <div class="results-header">
+            <div>#</div>
+            <div>Player</div>
+            <div style="text-align:center">Score</div>
+            <div style="text-align:center">PPG</div>
+            <div style="text-align:center">Form</div>
+            <div style="text-align:center">Price</div>
+            <div style="text-align:center">Fixture</div>
+            <div style="text-align:center">xGI/90</div>
+            <div>Ownership</div>
+          </div>
+          <div class="player-rows" id="playerRows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALGORITHM TAB -->
+    <div class="tab-panel" id="tab-algorithm">
+      <div class="algo-panel">
+        <div class="panel-title">How The Algorithm Works</div>
+        <div style="color:var(--text2);line-height:1.8;font-size:0.9rem">
+          <p style="margin-bottom:16px">The FPL Scout algorithm computes a composite <strong style="color:var(--accent)">Scout Score</strong> for each player by normalizing and weighting multiple features from the FPL API. Here's the full breakdown:</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px">
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.1em;color:#4cc9f0;margin-bottom:12px">FEATURES USED</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              ${[
+                ['Form (last 5 GWs)', 'Average points per game over last 5 gameweeks. High-weighted as it reflects recent momentum.', '#f72585'],
+                ['Points Per Game', 'Season-long consistency metric. Removes fixtures bias.', '#4cc9f0'],
+                ['Fixture Difficulty (FDR)', 'Official FPL fixture difficulty rating inverted (lower = easier = better score).', '#ffd60a'],
+                ['Expected Goals + Assists / 90', 'xG + xA per 90 mins. Predictive of future attacking returns.', '#00ff87'],
+                ['Ownership %', 'Differentials score higher when algorithm weight is negative. High ownership = safe pick.', '#ff6b35'],
+                ['Bonus Points', 'Historical BPS trend indicates players regularly involved in attacking moves.', '#a8d8a8'],
+                ['Minutes Played', 'Players with <60% of available minutes are penalized for rotation risk.', '#8ab4cc'],
+                ['ICT Index', "FPL's combined Influence, Creativity and Threat metric.", '#c77dff'],
+              ].map(([name, desc, color]) => `
+                <div style="background:var(--surface2);border-left:3px solid ${color};padding:12px 16px;border-radius:2px">
+                  <div style="font-family:'DM Mono',monospace;font-size:0.75rem;color:${color};margin-bottom:4px">${name}</div>
+                  <div style="font-size:0.8rem;color:var(--text2);line-height:1.6">${desc}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.1em;color:var(--accent);margin-bottom:12px">SCORING FORMULA</div>
+            <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(0,255,135,0.1);border-radius:4px;padding:20px;font-family:'DM Mono',monospace;font-size:0.75rem;line-height:2;color:#a8d8a8">
+              <span style="color:var(--muted)"># Normalize each feature 0–1</span><br>
+              norm(x) = (x − min) / (max − min)<br><br>
+              <span style="color:var(--muted)"># Compute weighted sum</span><br>
+              score = Σ weight_i × norm(feature_i)<br><br>
+              <span style="color:var(--muted)"># Apply rotation penalty</span><br>
+              if minutes_pct &lt; 0.6:<br>
+              &nbsp;&nbsp;score × 0.7<br><br>
+              <span style="color:var(--muted)"># Apply injury flag</span><br>
+              if status != 'a':<br>
+              &nbsp;&nbsp;score × 0 (excluded)
+            </div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.1em;color:var(--accent2);margin-top:24px;margin-bottom:12px">API ENDPOINTS</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${[
+                ['/api/bootstrap-static/', 'All players, teams, GW data'],
+                ['/api/fixtures/', 'All fixtures + FDR ratings'],
+                ['/api/element-summary/{id}/', 'Per-player history & fixtures'],
+                ['/api/event/{gw}/live/', 'Live GW stats'],
+              ].map(([ep, desc]) => `
+                <div style="font-family:'DM Mono',monospace;font-size:0.7rem;background:var(--surface2);padding:10px 12px;border-radius:2px;display:flex;flex-direction:column;gap:3px">
+                  <span style="color:var(--accent)">${ep}</span>
+                  <span style="color:var(--muted)">${desc}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CODE TAB -->
+    <div class="tab-panel" id="tab-code">
+      <div class="algo-panel">
+        <div class="panel-title">Python Implementation</div>
+        <div class="code-block" id="pythonCode"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModalBtn()">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let allPlayers = [];
+let currentFilter = 'ALL';
+let currentSort = 'score';
+
+const WEIGHTS = {
+  form:       { label: 'Form (last 5 GW)',    default: 30, color: '#f72585' },
+  ppg:        { label: 'Points Per Game',     default: 25, color: '#4cc9f0' },
+  fixture:    { label: 'Fixture Ease',        default: 20, color: '#ffd60a' },
+  xgi:        { label: 'xG+xA / 90',          default: 15, color: '#00ff87' },
+  ict:        { label: 'ICT Index',           default: 10, color: '#c77dff' },
+  bonus:      { label: 'Bonus Points',        default: 8,  color: '#a8d8a8' },
+  ownership:  { label: 'Low Ownership Bonus', default: -5, color: '#ff6b35' },
+};
+
+const weights = {};
+Object.keys(WEIGHTS).forEach(k => weights[k] = WEIGHTS[k].default);
+
+// ─── INIT ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildWeightsUI();
+  buildPythonCode();
+});
+
+function buildWeightsUI() {
+  const grid = document.getElementById('weightsGrid');
+  grid.innerHTML = Object.entries(WEIGHTS).map(([key, cfg]) => `
+    <div class="weight-item">
+      <label>${cfg.label}</label>
+      <div class="weight-row">
+        <input type="range" min="-20" max="40" value="${cfg.default}"
+          oninput="updateWeight('${key}', this.value)"
+          style="accent-color:${cfg.color}">
+        <span class="weight-val" id="wval-${key}">${cfg.default}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateWeight(key, val) {
+  weights[key] = parseFloat(val);
+  document.getElementById(`wval-${key}`).textContent = val;
+  if (allPlayers.length > 0) renderPlayers();
+}
+
+// ─── FETCH DATA ───────────────────────────────────────────
+async function fetchData() {
+  showState('loading');
+  document.getElementById('fetchBtn').disabled = true;
+
+  const proxies = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+    'https://cors-anywhere.herokuapp.com/'
+  ];
+
+  const BASE = 'https://fantasy.premierleague.com/api/';
+
+  setStep(1, 'active');
+  await delay(400);
+
+  let bootstrap = null;
+  let fixtures = null;
+
+  for (const proxy of proxies) {
+    try {
+      setStatusText(`Trying proxy: ${proxy.split('/')[2]}...`);
+      const res = await fetch(proxy + encodeURIComponent(BASE + 'bootstrap-static/'), { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      bootstrap = await res.json();
+      setStep(1, 'done'); setStep(2, 'done');
+
+      setStep(3, 'active');
+      const fres = await fetch(proxy + encodeURIComponent(BASE + 'fixtures/'), { signal: AbortSignal.timeout(8000) });
+      if (fres.ok) fixtures = await fres.json();
+      setStep(3, 'done');
+      break;
+    } catch(e) { continue; }
+  }
+
+  if (!bootstrap) {
+    showState('initial');
+    document.getElementById('fetchBtn').disabled = false;
+    document.getElementById('initialState').innerHTML = `
+      <div style="text-align:center;max-width:500px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent2);margin-bottom:16px">API BLOCKED BY CORS</div>
+        <div class="cors-note">
+          <strong>The FPL API cannot be accessed directly from browsers.</strong>
+          This is a CORS restriction. Options:<br><br>
+          • Use the <strong>Python script</strong> (Code tab) to fetch data locally<br>
+          • Install a CORS browser extension temporarily<br>
+          • Load demo data to explore the algorithm interface
+        </div>
+        <button class="demo-btn" onclick="loadDemoData()">▶ Load Demo Data Instead</button>
+      </div>
+    `;
+    return;
+  }
+
+  setStep(4, 'active');
+  await delay(300);
+
+  const { elements, teams, events, element_types } = bootstrap;
+  const currentEvent = events.find(e => e.is_current) || events.find(e => e.is_next) || events[events.length-1];
+  const nextGW = currentEvent?.id || 1;
+
+  document.getElementById('gwBadge').textContent = `GW ${nextGW}`;
+  document.getElementById('sumNextGW').textContent = nextGW;
+
+  const teamMap = {};
+  teams.forEach(t => teamMap[t.id] = t);
+
+  const posMap = { 1:'GK', 2:'DEF', 3:'MID', 4:'FWD' };
+
+  // Build fixture difficulty per team for next GW
+  const teamFDR = {};
+  if (fixtures) {
+    const nextFixtures = fixtures.filter(f => f.event === nextGW && !f.finished);
+    nextFixtures.forEach(f => {
+      teamFDR[f.team_h] = f.team_h_difficulty;
+      teamFDR[f.team_a] = f.team_a_difficulty;
+    });
+  }
+
+  allPlayers = elements
+    .filter(p => p.status === 'a' || p.status === 'u')
+    .map(p => {
+      const team = teamMap[p.team];
+      const pos = posMap[p.element_type] || 'MID';
+      const price = p.now_cost / 10;
+      const fdr = teamFDR[p.team] || 3;
+      const minutesPct = p.minutes / Math.max((nextGW - 1) * 90, 1);
+
+      const raw = {
+        form:      parseFloat(p.form) || 0,
+        ppg:       parseFloat(p.points_per_game) || 0,
+        fixture:   6 - fdr, // invert: lower difficulty = higher score
+        xgi:       (parseFloat(p.expected_goal_involvements_per_90) || 0),
+        ict:       parseFloat(p.ict_index) || 0,
+        bonus:     p.bonus || 0,
+        ownership: parseFloat(p.selected_by_percent) || 0,
+      };
+
+      return {
+        id: p.id,
+        name: p.web_name,
+        fullName: `${p.first_name} ${p.second_name}`,
+        team: team?.short_name || '???',
+        pos,
+        price,
+        fdr,
+        ownership: raw.ownership,
+        form: raw.form,
+        ppg: raw.ppg,
+        xgi: raw.xgi,
+        ict: raw.ict,
+        bonus: raw.bonus,
+        minutesPct,
+        status: p.status,
+        raw,
+        history: [], // would need per-player fetch
+      };
+    });
+
+  setStep(4, 'done'); setStep(5, 'active');
+  await delay(200);
+
+  computeScores();
+  setStep(5, 'done');
+  await delay(300);
+
+  document.getElementById('playerCount').textContent = `Players: ${allPlayers.length}`;
+  document.getElementById('sumTotal').textContent = allPlayers.length;
+  document.getElementById('sumAvgPts').textContent = (allPlayers.reduce((a,b) => a + b.ppg, 0) / allPlayers.length).toFixed(1);
+  document.getElementById('sumTopScore').textContent = Math.round(allPlayers[0]?.score * 100) || '—';
+
+  document.getElementById('statsSummary').style.display = 'grid';
+  document.getElementById('dataSourceBadge').innerHTML = `<span class="source-tag source-live">Live API</span>`;
+  setStatusText(`Loaded ${allPlayers.length} players from FPL API — GW ${nextGW}`);
+  document.getElementById('fetchBtn').disabled = false;
+  showState('results');
+  renderPlayers();
+}
+
+// ─── SCORING ──────────────────────────────────────────────
+function computeScores() {
+  const features = ['form', 'ppg', 'fixture', 'xgi', 'ict', 'bonus', 'ownership'];
+
+  // Get min/max per feature
+  const mins = {}, maxs = {};
+  features.forEach(f => {
+    const vals = allPlayers.map(p => p.raw[f]);
+    mins[f] = Math.min(...vals);
+    maxs[f] = Math.max(...vals);
+  });
+
+  allPlayers.forEach(p => {
+    let score = 0;
+    const breakdown = {};
+    features.forEach(f => {
+      const range = maxs[f] - mins[f];
+      const norm = range === 0 ? 0.5 : (p.raw[f] - mins[f]) / range;
+      const w = (weights[f] || 0) / 100;
+      // For ownership with negative weight, higher ownership = lower score (differential bonus)
+      const contribution = w * (f === 'ownership' ? 1 - norm : norm);
+      breakdown[f] = { norm, contribution, raw: p.raw[f] };
+      score += contribution;
+    });
+
+    // Rotation penalty
+    if (p.minutesPct < 0.6) score *= 0.7;
+
+    p.score = Math.max(0, score);
+    p.breakdown = breakdown;
+  });
+
+  allPlayers.sort((a, b) => b.score - a.score);
+}
+
+// ─── RENDER ───────────────────────────────────────────────
+function renderPlayers() {
+  computeScores();
+
+  let filtered = currentFilter === 'ALL'
+    ? allPlayers
+    : allPlayers.filter(p => p.pos === currentFilter);
+
+  if (currentSort === 'form') filtered = [...filtered].sort((a,b) => b.form - a.form);
+  else if (currentSort === 'ppg') filtered = [...filtered].sort((a,b) => b.ppg - a.ppg);
+  else if (currentSort === 'price') filtered = [...filtered].sort((a,b) => b.price - a.price);
+  else if (currentSort === 'ownership') filtered = [...filtered].sort((a,b) => b.ownership - a.ownership);
+  else if (currentSort === 'difficulty') filtered = [...filtered].sort((a,b) => a.fdr - b.fdr);
+  // else: score (already sorted)
+
+  const fdrColors = { 1:'#00ff87', 2:'#8be36f', 3:'#ffd60a', 4:'#ff6b35', 5:'#f72585' };
+  const posColors = { GK:'#ffd60a', DEF:'#4cc9f0', MID:'#f72585', FWD:'#ff6b35' };
+
+  const html = filtered.slice(0, 80).map((p, i) => {
+    const rank = i + 1;
+    const isTop = rank <= 3;
+    const diffColor = fdrColors[p.fdr] || '#ffd60a';
+    const scoreInt = Math.round(p.score * 100);
+    const formPips = generateFormPips(p.form);
+
+    return `
+      <div class="player-row" onclick="openModal(${p.id})" style="animation-delay:${Math.min(i * 0.02, 1)}s">
+        <div class="rank-num ${isTop ? 'top3' : ''}">${rank}</div>
+        <div class="player-info">
+          <div class="player-name">
+            <span class="pos-badge pos-${p.pos}">${p.pos}</span>${p.name}
+          </div>
+          <div class="player-meta">${p.team} · £${p.price.toFixed(1)}m</div>
+        </div>
+        <div class="score-cell" style="${isTop ? 'font-size:1.8rem' : ''}">${scoreInt}</div>
+        <div class="stat-cell">${p.ppg.toFixed(1)}</div>
+        <div class="stat-cell">
+          <div class="form-bar">${formPips}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);text-align:center;margin-top:4px">${p.form.toFixed(1)}</div>
+        </div>
+        <div class="stat-cell" style="color:var(--text)">£${p.price.toFixed(1)}m</div>
+        <div class="stat-cell">
+          <span class="diff-badge" style="background:${diffColor}22;color:${diffColor}">${p.fdr}</span>
+        </div>
+        <div class="stat-cell">${p.xgi.toFixed(2)}</div>
+        <div class="stat-cell">
+          <div class="ownership-bar">
+            <div class="own-track"><div class="own-fill" style="width:${Math.min(p.ownership, 100)}%"></div></div>
+            <span>${p.ownership.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('playerRows').innerHTML = html;
+}
+
+function generateFormPips(form) {
+  const level = form / 15;
+  return Array.from({length: 5}, (_, i) => {
+    const filled = i < Math.round(level * 5);
+    const color = filled
+      ? `hsl(${120 * level}, 80%, 55%)`
+      : 'rgba(255,255,255,0.08)';
+    return `<div class="form-pip" style="background:${color}"></div>`;
+  }).join('');
+}
+
+// ─── MODAL ────────────────────────────────────────────────
+function openModal(id) {
+  const p = allPlayers.find(x => x.id === id);
+  if (!p) return;
+
+  const featureLabels = {
+    form: 'Form', ppg: 'Pts/Game', fixture: 'Fixture Ease',
+    xgi: 'xG+xA/90', ict: 'ICT Index', bonus: 'Bonus Pts', ownership: 'Low Ownership'
+  };
+
+  const featureColors = {
+    form: '#f72585', ppg: '#4cc9f0', fixture: '#ffd60a',
+    xgi: '#00ff87', ict: '#c77dff', bonus: '#a8d8a8', ownership: '#ff6b35'
+  };
+
+  const breakdownHTML = Object.entries(p.breakdown).map(([key, val]) => {
+    const pct = Math.max(0, Math.min(1, (val.norm || 0)));
+    const contribution = val.contribution;
+    const color = featureColors[key] || 'var(--accent)';
+    return `
+      <div class="feature-row">
+        <div class="feature-label">
+          <span style="color:${color}">${featureLabels[key]}</span>
+          <span style="color:var(--text2)">raw: ${typeof val.raw === 'number' ? val.raw.toFixed(2) : val.raw} · contrib: ${(contribution * 100).toFixed(1)}</span>
+        </div>
+        <div class="feature-track">
+          <div class="feature-fill" style="width:${pct * 100}%;background:${color}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div class="modal-player-name">${p.name}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--muted);margin-top:4px">
+          <span class="pos-badge pos-${p.pos}">${p.pos}</span>${p.team} · £${p.price.toFixed(1)}m
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:4px">Scout Score</div>
+        <div class="modal-score">${Math.round(p.score * 100)}</div>
+      </div>
+    </div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:0.15em;color:var(--muted);margin-bottom:12px">FEATURE BREAKDOWN</div>
+    <div class="feature-breakdown">${breakdownHTML}</div>
+    <div style="margin-top:24px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      ${[
+        ['PPG', p.ppg.toFixed(1)],
+        ['Form', p.form.toFixed(1)],
+        ['FDR', p.fdr],
+        ['Ownership', p.ownership.toFixed(1) + '%'],
+      ].map(([l,v]) => `
+        <div style="background:var(--surface2);padding:12px;border-radius:3px;text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:4px">${l}</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--text)">${v}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModalBtn();
+}
+function closeModalBtn() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+// ─── FILTERS ─────────────────────────────────────────────
+function filterPos(pos, btn) {
+  currentFilter = pos;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (allPlayers.length > 0) renderPlayers();
+}
+
+function sortPlayers(val) {
+  currentSort = val;
+  if (allPlayers.length > 0) renderPlayers();
+}
+
+// ─── STATE HELPERS ────────────────────────────────────────
+function showState(state) {
+  ['initial','loading','results'].forEach(s => {
+    document.getElementById(s + 'State').style.display = s === state ? '' : 'none';
+  });
+}
+
+function setStep(n, status) {
+  const el = document.getElementById(`step${n}`);
+  if (!el) return;
+  el.className = `loading-step ${status}`;
+  el.querySelector('.step-icon').textContent = status === 'done' ? '✓' : status === 'active' ? '●' : '○';
+}
+
+function setStatusText(t) { document.getElementById('statusText').textContent = t; }
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['recommendations','algorithm','code'];
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + name);
+  });
+}
+
+// ─── DEMO DATA ────────────────────────────────────────────
+function loadDemoData() {
+  const demoPlayers = [
+    { name:'Salah', team:'LIV', pos:'MID', price:13.2, ppg:8.4, form:12.6, fdr:2, ownership:55.4, xgi:0.72, ict:198, bonus:18 },
+    { name:'Palmer', team:'CHE', pos:'MID', price:11.5, ppg:7.8, form:11.2, fdr:3, ownership:41.2, xgi:0.68, ict:176, bonus:15 },
+    { name:'Mbeumo', team:'BRE', pos:'MID', price:8.8, ppg:7.2, form:9.8, fdr:2, ownership:32.1, xgi:0.61, ict:155, bonus:12 },
+    { name:'Haaland', team:'MCI', pos:'FWD', price:14.8, ppg:6.9, form:8.4, fdr:4, ownership:44.7, xgi:0.85, ict:162, bonus:14 },
+    { name:'Saka', team:'ARS', pos:'MID', price:10.4, ppg:7.0, form:8.8, fdr:3, ownership:38.6, xgi:0.59, ict:148, bonus:11 },
+    { name:'Robertson', team:'LIV', pos:'DEF', price:7.3, ppg:6.1, form:7.6, fdr:2, ownership:22.4, xgi:0.34, ict:98, bonus:9 },
+    { name:'Alexander-Arnold', team:'LIV', pos:'DEF', price:8.1, ppg:6.4, form:8.0, fdr:2, ownership:28.9, xgi:0.41, ict:122, bonus:10 },
+    { name:'Flekken', team:'BRE', pos:'GK', price:5.0, ppg:5.2, form:6.4, fdr:2, ownership:8.2, xgi:0.05, ict:32, bonus:4 },
+    { name:'Isak', team:'NEW', pos:'FWD', price:9.2, ppg:6.8, form:9.2, fdr:3, ownership:19.8, xgi:0.58, ict:138, bonus:10 },
+    { name:'Salisu', team:'NEW', pos:'DEF', price:5.2, ppg:5.4, form:6.8, fdr:3, ownership:11.4, xgi:0.18, ict:72, bonus:6 },
+    { name:'Watkins', team:'AVL', pos:'FWD', price:9.8, ppg:6.5, form:7.4, fdr:3, ownership:24.3, xgi:0.55, ict:134, bonus:10 },
+    { name:'Pedro Porro', team:'TOT', pos:'DEF', price:6.1, ppg:5.8, form:7.2, fdr:3, ownership:15.2, xgi:0.28, ict:88, bonus:8 },
+    { name:'Trossard', team:'ARS', pos:'MID', price:7.4, ppg:5.6, form:7.0, fdr:3, ownership:12.1, xgi:0.38, ict:102, bonus:7 },
+    { name:'Dunk', team:'BHA', pos:'DEF', price:5.6, ppg:5.0, form:6.0, fdr:4, ownership:9.8, xgi:0.12, ict:58, bonus:5 },
+    { name:'Darwin', team:'LIV', pos:'FWD', price:8.8, ppg:5.8, form:7.6, fdr:2, ownership:16.5, xgi:0.52, ict:118, bonus:9 },
+    { name:'Gvardiol', team:'MCI', pos:'DEF', price:6.8, ppg:5.4, form:6.4, fdr:4, ownership:13.4, xgi:0.24, ict:78, bonus:6 },
+    { name:'Raya', team:'ARS', pos:'GK', price:5.8, ppg:5.6, form:6.8, fdr:3, ownership:24.2, xgi:0.06, ict:38, bonus:5 },
+    { name:'Enciso', team:'BHA', pos:'MID', price:6.2, ppg:5.0, form:6.2, fdr:4, ownership:7.4, xgi:0.32, ict:88, bonus:6 },
+    { name:'Andreas', team:'FUL', pos:'MID', price:6.8, ppg:5.8, form:7.4, fdr:2, ownership:10.8, xgi:0.40, ict:108, bonus:8 },
+    { name:'Gordon', team:'NEW', pos:'MID', price:8.4, ppg:6.2, form:7.8, fdr:3, ownership:18.6, xgi:0.48, ict:128, bonus:9 },
+  ];
+
+  document.getElementById('gwBadge').textContent = 'GW DEMO';
+  document.getElementById('sumNextGW').textContent = 'DEMO';
+
+  allPlayers = demoPlayers.map((p, i) => ({
+    id: i + 1,
+    name: p.name,
+    fullName: p.name,
+    team: p.team,
+    pos: p.pos,
+    price: p.price,
+    fdr: p.fdr,
+    ownership: p.ownership,
+    form: p.form,
+    ppg: p.ppg,
+    xgi: p.xgi,
+    ict: p.ict,
+    bonus: p.bonus,
+    minutesPct: 0.85,
+    status: 'a',
+    raw: {
+      form: p.form,
+      ppg: p.ppg,
+      fixture: 6 - p.fdr,
+      xgi: p.xgi,
+      ict: p.ict,
+      bonus: p.bonus,
+      ownership: p.ownership,
+    },
+    breakdown: {},
+    history: [],
+  }));
+
+  document.getElementById('playerCount').textContent = `Players: ${allPlayers.length} (demo)`;
+  document.getElementById('sumTotal').textContent = allPlayers.length;
+  document.getElementById('sumAvgPts').textContent = (allPlayers.reduce((a,b) => a+b.ppg,0)/allPlayers.length).toFixed(1);
+  document.getElementById('statsSummary').style.display = 'grid';
+  computeScores();
+  document.getElementById('sumTopScore').textContent = Math.round(allPlayers[0]?.score * 100) || '—';
+  document.getElementById('dataSourceBadge').innerHTML = `<span class="source-tag source-demo">Demo Data</span>`;
+  setStatusText('Demo data loaded — showing algorithm with sample 2024/25 player stats');
+  showState('results');
+  renderPlayers();
+}
+
+// ─── PYTHON CODE ─────────────────────────────────────────
+function buildPythonCode() {
+  const code = `<span class="comment">"""
+FPL Scout — Player Recommendation Algorithm
+Fetches live data from the Fantasy Premier League API
+and scores players using a weighted multi-feature model.
+
+Install deps:  pip install requests pandas scikit-learn
+"""</span>
+
+<span class="keyword">import</span> requests
+<span class="keyword">import</span> pandas <span class="keyword">as</span> pd
+<span class="keyword">import</span> numpy <span class="keyword">as</span> np
+<span class="keyword">from</span> sklearn.preprocessing <span class="keyword">import</span> MinMaxScaler
+
+BASE_URL = <span class="string">"https://fantasy.premierleague.com/api/"</span>
+
+<span class="comment"># ── 1. FETCH DATA ──────────────────────────────────────────────</span>
+<span class="keyword">def</span> <span class="fn">fetch_bootstrap</span>():
+    <span class="string">"""Main endpoint — all players, teams, gameweek info."""</span>
+    r = requests.get(BASE_URL + <span class="string">"bootstrap-static/"</span>, timeout=<span class="number">15</span>)
+    r.raise_for_status()
+    <span class="keyword">return</span> r.json()
+
+<span class="keyword">def</span> <span class="fn">fetch_fixtures</span>():
+    <span class="string">"""All fixtures with FDR ratings."""</span>
+    r = requests.get(BASE_URL + <span class="string">"fixtures/"</span>, timeout=<span class="number">15</span>)
+    r.raise_for_status()
+    <span class="keyword">return</span> r.json()
+
+<span class="keyword">def</span> <span class="fn">fetch_player_history</span>(player_id):
+    <span class="string">"""Per-player historical GW data + upcoming fixtures."""</span>
+    r = requests.get(f<span class="string">"{BASE_URL}element-summary/{player_id}/"</span>, timeout=<span class="number">15</span>)
+    r.raise_for_status()
+    <span class="keyword">return</span> r.json()
+
+<span class="comment"># ── 2. BUILD PLAYER DATAFRAME ──────────────────────────────────</span>
+<span class="keyword">def</span> <span class="fn">build_dataframe</span>(bootstrap, fixtures):
+    elements = bootstrap[<span class="string">"elements"</span>]
+    teams    = {t[<span class="string">"id"</span>]: t <span class="keyword">for</span> t <span class="keyword">in</span> bootstrap[<span class="string">"teams"</span>]}
+    events   = bootstrap[<span class="string">"events"</span>]
+    pos_map  = {<span class="number">1</span>: <span class="string">"GK"</span>, <span class="number">2</span>: <span class="string">"DEF"</span>, <span class="number">3</span>: <span class="string">"MID"</span>, <span class="number">4</span>: <span class="string">"FWD"</span>}
+
+    <span class="comment"># Find next gameweek</span>
+    current_gw = next(
+        (e[<span class="string">"id"</span>] <span class="keyword">for</span> e <span class="keyword">in</span> events <span class="keyword">if</span> e[<span class="string">"is_next"</span>]),
+        events[-<span class="number">1</span>][<span class="string">"id"</span>]
+    )
+    print(f<span class="string">"Analysing for GW {current_gw}"</span>)
+
+    <span class="comment"># Map fixture difficulty for next GW</span>
+    next_fdr = {}
+    <span class="keyword">for</span> f <span class="keyword">in</span> fixtures:
+        <span class="keyword">if</span> f[<span class="string">"event"</span>] == current_gw <span class="keyword">and not</span> f[<span class="string">"finished"</span>]:
+            next_fdr[f[<span class="string">"team_h"</span>]] = f[<span class="string">"team_h_difficulty"</span>]
+            next_fdr[f[<span class="string">"team_a"</span>]] = f[<span class="string">"team_a_difficulty"</span>]
+
+    rows = []
+    <span class="keyword">for</span> p <span class="keyword">in</span> elements:
+        <span class="keyword">if</span> p[<span class="string">"status"</span>] <span class="keyword">not in</span> (<span class="string">"a"</span>, <span class="string">"u"</span>):  <span class="comment"># skip injured/suspended</span>
+            <span class="keyword">continue</span>
+
+        team   = teams.get(p[<span class="string">"team"</span>], {})
+        fdr    = next_fdr.get(p[<span class="string">"team"</span>], <span class="number">3</span>)
+        played = max((current_gw - <span class="number">1</span>) * <span class="number">90</span>, <span class="number">1</span>)
+
+        rows.append({
+            <span class="string">"id"</span>:            p[<span class="string">"id"</span>],
+            <span class="string">"name"</span>:          p[<span class="string">"web_name"</span>],
+            <span class="string">"team"</span>:          team.get(<span class="string">"short_name"</span>, <span class="string">"???"</span>),
+            <span class="string">"position"</span>:      pos_map.get(p[<span class="string">"element_type"</span>], <span class="string">"MID"</span>),
+            <span class="string">"price"</span>:         p[<span class="string">"now_cost"</span>] / <span class="number">10</span>,
+            <span class="string">"form"</span>:          float(p[<span class="string">"form"</span>] <span class="keyword">or</span> <span class="number">0</span>),
+            <span class="string">"ppg"</span>:           float(p[<span class="string">"points_per_game"</span>] <span class="keyword">or</span> <span class="number">0</span>),
+            <span class="string">"ownership"</span>:     float(p[<span class="string">"selected_by_percent"</span>] <span class="keyword">or</span> <span class="number">0</span>),
+            <span class="string">"minutes_pct"</span>:   p[<span class="string">"minutes"</span>] / played,
+            <span class="string">"ict_index"</span>:     float(p[<span class="string">"ict_index"</span>] <span class="keyword">or</span> <span class="number">0</span>),
+            <span class="string">"bonus"</span>:         p[<span class="string">"bonus"</span>],
+            <span class="string">"xgi_per90"</span>:     float(p.get(<span class="string">"expected_goal_involvements_per_90"</span>, <span class="number">0</span>) <span class="keyword">or</span> <span class="number">0</span>),
+            <span class="string">"fdr"</span>:           fdr,
+            <span class="string">"fixture_ease"</span>:  <span class="number">6</span> - fdr,  <span class="comment"># invert FDR</span>
+            <span class="string">"status"</span>:        p[<span class="string">"status"</span>],
+        })
+
+    <span class="keyword">return</span> pd.DataFrame(rows), current_gw
+
+<span class="comment"># ── 3. SCORE PLAYERS ───────────────────────────────────────────</span>
+WEIGHTS = {
+    <span class="string">"form"</span>:         <span class="number">0.30</span>,
+    <span class="string">"ppg"</span>:          <span class="number">0.25</span>,
+    <span class="string">"fixture_ease"</span>: <span class="number">0.20</span>,
+    <span class="string">"xgi_per90"</span>:    <span class="number">0.15</span>,
+    <span class="string">"ict_index"</span>:    <span class="number">0.10</span>,
+    <span class="string">"bonus"</span>:        <span class="number">0.08</span>,
+    <span class="string">"ownership"</span>:   -<span class="number">0.05</span>,  <span class="comment"># negative = differential bonus</span>
+}
+
+<span class="keyword">def</span> <span class="fn">score_players</span>(df):
+    features = list(WEIGHTS.keys())
+    scaler   = MinMaxScaler()
+    normed   = scaler.fit_transform(df[features])
+    normed_df = pd.DataFrame(normed, columns=features, index=df.index)
+
+    <span class="comment"># Invert ownership (high ownership → lower score)</span>
+    normed_df[<span class="string">"ownership"</span>] = <span class="number">1</span> - normed_df[<span class="string">"ownership"</span>]
+
+    <span class="comment"># Weighted sum</span>
+    df[<span class="string">"score"</span>] = sum(
+        normed_df[f] * w <span class="keyword">for</span> f, w <span class="keyword">in</span> WEIGHTS.items()
+    )
+
+    <span class="comment"># Rotation risk penalty</span>
+    df.loc[df[<span class="string">"minutes_pct"</span>] < <span class="number">0.6</span>, <span class="string">"score"</span>] *= <span class="number">0.7</span>
+
+    <span class="comment"># Scale 0–100</span>
+    df[<span class="string">"score"</span>] = (df[<span class="string">"score"</span>] * <span class="number">100</span>).round(<span class="number">1</span>)
+    <span class="keyword">return</span> df.sort_values(<span class="string">"score"</span>, ascending=False).reset_index(drop=True)
+
+<span class="comment"># ── 4. FILTER & DISPLAY ────────────────────────────────────────</span>
+<span class="keyword">def</span> <span class="fn">get_recommendations</span>(df, position=None, max_price=None, top_n=<span class="number">20</span>):
+    out = df.copy()
+    <span class="keyword">if</span> position:
+        out = out[out[<span class="string">"position"</span>] == position]
+    <span class="keyword">if</span> max_price:
+        out = out[out[<span class="string">"price"</span>] <= max_price]
+    cols = [<span class="string">"name"</span>, <span class="string">"team"</span>, <span class="string">"position"</span>, <span class="string">"price"</span>, <span class="string">"score"</span>,
+            <span class="string">"ppg"</span>, <span class="string">"form"</span>, <span class="string">"fdr"</span>, <span class="string">"ownership"</span>, <span class="string">"xgi_per90"</span>]
+    <span class="keyword">return</span> out[cols].head(top_n).to_string(index=False)
+
+<span class="comment"># ── 5. MAIN ────────────────────────────────────────────────────</span>
+<span class="keyword">if</span> __name__ == <span class="string">"__main__"</span>:
+    print(<span class="string">"Fetching FPL data..."</span>)
+    bootstrap = fetch_bootstrap()
+    fixtures  = fetch_fixtures()
+
+    df, gw = build_dataframe(bootstrap, fixtures)
+    df     = score_players(df)
+
+    print(f<span class="string">"\n{'='*60}"</span>)
+    print(f<span class="string">"  FPL SCOUT — GW {gw} Recommendations"</span>)
+    print(<span class="string">'='*60</span>)
+
+    <span class="keyword">for</span> pos <span class="keyword">in</span> [<span class="string">"GK"</span>, <span class="string">"DEF"</span>, <span class="string">"MID"</span>, <span class="string">"FWD"</span>]:
+        print(f<span class="string">"\n── TOP {pos}s ──"</span>)
+        print(get_recommendations(df, position=pos, top_n=<span class="number">5</span>))
+
+    print(<span class="string">"\n── TOP OVERALL ──"</span>)
+    print(get_recommendations(df, top_n=<span class="number">10</span>))
+
+    <span class="comment"># Export to CSV</span>
+    df.to_csv(f<span class="string">"fpl_scout_gw{gw}.csv"</span>, index=False)
+    print(f<span class="string">"\nSaved: fpl_scout_gw{gw}.csv"</span>)`;
+
+  document.getElementById('pythonCode').innerHTML = code;
+}
+
+// ─── CSV LOADING ──────────────────────────────────────────
+
+// Column name aliases — handles variations in CSV column names
+const COL_ALIASES = {
+  name:        ['name', 'web_name', 'player', 'player_name'],
+  team:        ['team', 'team_short', 'club'],
+  pos:         ['position', 'pos', 'element_type'],
+  price:       ['price', 'now_cost', 'cost', 'value'],
+  ppg:         ['ppg', 'points_per_game', 'avg_points'],
+  form:        ['form', 'recent_form'],
+  fdr:         ['fdr', 'fixture_difficulty', 'fixture_ease'],
+  ownership:   ['ownership', 'selected_by_percent', 'owned_by', 'tsb'],
+  xgi:         ['xgi_per90', 'xgi', 'expected_goal_involvements_per_90', 'xg_inv_per90', 'xi_per_90'],
+  ict:         ['ict_index', 'ict', 'ict_index_rank'],
+  bonus:       ['bonus', 'bonus_points', 'bps'],
+  minutesPct:  ['minutes_pct', 'minutes_percent', 'minutes_pct_season'],
+  status:      ['status'],
+  score:       ['score', 'scout_score'],
+};
+
+function resolveCol(headers, aliases) {
+  const lower = headers.map(h => h.toLowerCase().trim());
+  for (const alias of aliases) {
+    const idx = lower.indexOf(alias.toLowerCase());
+    if (idx !== -1) return headers[idx];
+  }
+  return null;
+}
+
+function parseFloat2(val, fallback = 0) {
+  const n = parseFloat(val);
+  return isNaN(n) ? fallback : n;
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error('CSV must have at least a header row and one data row.');
+
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+
+  // Resolve columns
+  const cols = {};
+  for (const [field, aliases] of Object.entries(COL_ALIASES)) {
+    cols[field] = resolveCol(headers, aliases);
+  }
+
+  // Validate required columns
+  const required = ['name', 'pos', 'ppg', 'form', 'price'];
+  const missing = required.filter(f => !cols[f]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required columns: ${missing.join(', ')}.\nFound: ${headers.join(', ')}`);
+  }
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Parse CSV respecting quoted fields
+    const cells = [];
+    let current = '';
+    let inQuote = false;
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] === '"') { inQuote = !inQuote; continue; }
+      if (line[c] === ',' && !inQuote) { cells.push(current); current = ''; continue; }
+      current += line[c];
+    }
+    cells.push(current);
+
+    const get = (field) => cols[field] ? (cells[headers.indexOf(cols[field])] || '').trim() : '';
+
+    const rawForm    = parseFloat2(get('form'));
+    const rawPpg     = parseFloat2(get('ppg'));
+    let   rawFdr     = parseFloat2(get('fdr'), 3);
+    // If fdr column is actually "fixture_ease" (already inverted), detect by range
+    // fixture_ease = 6 - fdr so values > 3 mean easier fixtures
+    // We store fixture_ease in raw for the algorithm
+    const fixtureVal = (cols['fdr'] && cols['fdr'].toLowerCase().includes('ease'))
+      ? rawFdr
+      : 6 - rawFdr;
+
+    const rawXgi     = parseFloat2(get('xgi'));
+    const rawIct     = parseFloat2(get('ict'));
+    const rawBonus   = parseFloat2(get('bonus'));
+    const rawOwn     = parseFloat2(get('ownership'));
+    const rawPrice   = parseFloat2(get('price'));
+
+    // Normalise position label
+    let pos = (get('pos') || 'MID').toUpperCase().trim();
+    if (pos === 'GOALKEEPER' || pos === '1') pos = 'GK';
+    if (pos === 'DEFENDER'   || pos === '2') pos = 'DEF';
+    if (pos === 'MIDFIELDER' || pos === '3') pos = 'MID';
+    if (pos === 'FORWARD'    || pos === '4') pos = 'FWD';
+
+    rows.push({
+      id:         i,
+      name:       get('name') || `Player ${i}`,
+      fullName:   get('name') || `Player ${i}`,
+      team:       get('team') || '???',
+      pos,
+      price:      rawPrice,
+      fdr:        rawFdr,
+      ownership:  rawOwn,
+      form:       rawForm,
+      ppg:        rawPpg,
+      xgi:        rawXgi,
+      ict:        rawIct,
+      bonus:      rawBonus,
+      minutesPct: parseFloat2(get('minutesPct'), 0.85),
+      status:     get('status') || 'a',
+      raw: {
+        form:     rawForm,
+        ppg:      rawPpg,
+        fixture:  fixtureVal,
+        xgi:      rawXgi,
+        ict:      rawIct,
+        bonus:    rawBonus,
+        ownership:rawOwn,
+      },
+      breakdown: {},
+    });
+  }
+
+  if (rows.length === 0) throw new Error('No valid player rows found in CSV.');
+  return rows;
+}
+
+function handleCSVFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = ''; // reset so same file can be re-loaded
+  readCSVFile(file);
+}
+
+function readCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const players = parseCSV(e.target.result);
+      loadFromCSVData(players, file.name);
+      hideCsvError();
+    } catch (err) {
+      showCsvError(err.message);
+    }
+  };
+  reader.onerror = () => showCsvError('Could not read file.');
+  reader.readAsText(file);
+}
+
+function loadFromCSVData(players, filename) {
+  allPlayers = players;
+
+  // Detect GW from filename e.g. fpl_scout_gw29.csv
+  const gwMatch = filename.match(/gw(\d+)/i);
+  const gw = gwMatch ? gwMatch[1] : '?';
+  document.getElementById('gwBadge').textContent = `GW ${gw}`;
+  document.getElementById('sumNextGW').textContent = gw;
+
+  computeScores();
+
+  document.getElementById('playerCount').textContent = `Players: ${allPlayers.length}`;
+  document.getElementById('sumTotal').textContent = allPlayers.length;
+  document.getElementById('sumAvgPts').textContent = (allPlayers.reduce((a,b) => a + b.ppg, 0) / allPlayers.length).toFixed(1);
+  document.getElementById('sumTopScore').textContent = Math.round(allPlayers[0]?.score * 100) || '—';
+  document.getElementById('statsSummary').style.display = 'grid';
+  document.getElementById('dataSourceBadge').innerHTML = `<span class="source-tag source-csv">CSV: ${filename}</span>`;
+  setStatusText(`Loaded ${allPlayers.length} players from ${filename}`);
+  showState('results');
+  renderPlayers();
+}
+
+// ─── DRAG & DROP ─────────────────────────────────────────
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('csvDropZone').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  document.getElementById('csvDropZone').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('csvDropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.csv')) {
+    showCsvError('Please drop a .csv file.');
+    return;
+  }
+  readCSVFile(file);
+}
+
+function showCsvError(msg) {
+  const el = document.getElementById('csvError');
+  if (el) { el.style.display = 'block'; el.textContent = '⚠ ' + msg; }
+  // Also show in status
+  setStatusText('CSV Error: ' + msg.split('\n')[0]);
+}
+
+function hideCsvError() {
+  const el = document.getElementById('csvError');
+  if (el) el.style.display = 'none';
+}
+
+// Patch setDataSourceBadge into fetchData and loadDemoData completions
+const _origFetchData = fetchData;
+// (We'll patch inline via status bar updates already done in fetchData)
+
+// Override the live data source badge after fetchData succeeds
+const origShowState = showState;
+// Tag already set inline in fetchData; for demo we patch here:
+const _origLoadDemoData = loadDemoData;
+</script>
+</body>
+</html>
